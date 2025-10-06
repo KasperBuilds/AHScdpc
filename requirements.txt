@@ -1,0 +1,13 @@
+# Web framework
+Flask==3.0.3
+
+# Production WSGI server (for Railway)
+gunicorn==22.0.0
+
+# Optional helpers (used internally by Flask)
+itsdangerous==2.2.0
+Jinja2==3.1.4
+Werkzeug==3.0.3
+
+# SQLite comes with Python, no need to list sqlite3 separately
+
