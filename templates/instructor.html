@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h4>Instructor dashboard</h4>
+  <form method="post" action="{{ url_for('toggle_queue') }}">
+    <button class="btn {{ 'btn-danger' if q.is_open else 'btn-success' }}">
+      {{ 'Close queue' if q.is_open else 'Open queue' }}
+    </button>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="label">Status</div>
+      <div class="value {{ 'text-success' if q.is_open else 'text-danger' }}" id="statStatus">
+        {{ 'Open' if q.is_open else 'Closed' }}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="label">Waiting</div>
+      <div class="value" id="statWaiting">{{ counts.waiting }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="label">Helping</div>
+      <div class="value" id="statHelping">{{ counts.helping }}</div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="label">Avg wait</div>
+      <div class="value" id="statAvg">{{ avg_wait }} mins</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="card-title">Queue</h5>
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            <th>#</th><th>Name</th><th>Question</th><th>Résumé</th><th>Since</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody><!-- JS fills here --></tbody>
+      </table>
+    </div>
+    <p class="text-muted mt-2" id="emptyHint" style="display:none;">The queue is empty.</p>
+  </div>
+</div>
+
+<script>
+async function refreshQueue() {
+  try {
+    const res = await fetch("/api/queue", { cache: "no-store" });
+    const data = await res.json();
+    const tbody = document.querySelector("table tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    data.forEach(r => {
+      const isHelping = r.status === "helping";
+      const resumeCell = r.resume_filename
+        ? `<a href="/download/${r.id}" class="btn btn-link btn-sm p-0">${r.resume_orig_name || 'Download'}</a>`
+        : `<span class="text-muted">none</span>`;
+      const qShort = r.question_body.length > 80 ? r.question_body.slice(0, 80) + "…" : r.question_body;
+      const row = `
+        <tr>
+          <td>${r.id}</td>
+          <td>${r.name}</td>
+          <td style="max-width:380px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${r.question_body.replace(/"/g, '&quot;')}">${qShort}</td>
+          <td>${resumeCell}</td>
+          <td>${r.created_at}</td>
+          <td>${r.status}</td>
+          <td class="d-flex gap-2">
+            <form method="post" action="/question/${r.id}/start">
+              <button class="btn btn-outline-primary btn-sm" ${isHelping ? "disabled" : ""}>Start</button>
+            </form>
+            <form method="post" action="/question/${r.id}/done">
+              <button class="btn btn-success btn-sm">Done</button>
+            </form>
+            <form method="post" action="/question/${r.id}/cancel">
+              <button class="btn btn-outline-secondary btn-sm">Remove</button>
+            </form>
+          </td>
+        </tr>`;
+      tbody.insertAdjacentHTML("beforeend", row);
+    });
+    const hint = document.getElementById("emptyHint");
+    if (hint) hint.style.display = data.length ? "none" : "block";
+  } catch (err) {
+    console.error("Queue refresh failed:", err);
+  }
+}
+
+async function refreshStats() {
+  try {
+    const res = await fetch("/api/stats", { cache: "no-store" });
+    const data = await res.json();
+
+    const statusEl = document.getElementById("statStatus");
+    const waitEl   = document.getElementById("statWaiting");
+    const helpEl   = document.getElementById("statHelping");
+    const avgEl    = document.getElementById("statAvg");
+
+    if (statusEl) {
+      statusEl.textContent = data.queue.is_open ? "Open" : "Closed";
+      statusEl.classList.toggle("text-success", data.queue.is_open);
+      statusEl.classList.toggle("text-danger", !data.queue.is_open);
+    }
+    if (waitEl) waitEl.textContent = data.counts.waiting;
+    if (helpEl) helpEl.textContent = data.counts.helping;
+    if (avgEl)  avgEl.textContent  = `${data.avg_wait_minutes} mins`;
+  } catch (e) {
+    console.error("Stats refresh failed:", e);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  refreshQueue();
+  refreshStats();
+  setInterval(refreshQueue, 5000);
+  setInterval(refreshStats, 5000);
+});
+</script>
+{% endblock %}
